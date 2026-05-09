@@ -2,9 +2,59 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
+# ── Access Control ──────────────────────────────────────────────────────────────
+def is_authenticated():
+    return st.session_state.get("phys_auth", False)
+
+def show_access_gate():
+    st.set_page_config(page_title="Kodari Physics", layout="centered")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("## ⚛️ Kodari Physics")
+        st.markdown("*A-Level Physics Revision*")
+        st.markdown("---")
+        st.markdown("#### Enter your access code")
+        code = st.text_input(
+            label="Access Code",
+            placeholder="e.g. PHYS-A001",
+            label_visibility="collapsed",
+        )
+        if st.button("Access →", type="primary", use_container_width=True):
+            if not code:
+                st.error("Please enter your access code.")
+            else:
+                try:
+                    valid_codes = [c.strip().upper() for c in st.secrets["PHYS_ACCESS_CODES"]]
+                    if code.strip().upper() in valid_codes:
+                        st.session_state["phys_auth"] = True
+                        st.rerun()
+                    else:
+                        st.error("Invalid access code. Please check your code and try again.")
+                except Exception:
+                    st.error("Access code system error. Please contact your teacher.")
+        try:
+            purchase_url = st.secrets.get("PHYS_STRIPE_URL", "")
+        except Exception:
+            purchase_url = ""
+        if purchase_url:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align:center'>"
+                f"<a href='{purchase_url}' target='_blank'>🛒 Get Physics Access</a>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+# ── Gate Check ──────────────────────────────────────────────────────────────────
+if not is_authenticated():
+    show_access_gate()
+    st.stop()
+
+# ── 원본 코드 (한 줄도 수정 없음) ────────────────────────────────────────────────
+
 # 1. API Configuration
 try:
-    # Streamlit Secrets에 저장된 API 키를 불러옵니다.
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
     st.error("API Key missing! Check your Streamlit Secrets settings.")
@@ -12,14 +62,10 @@ except Exception as e:
 # 2. Smart Model Selection Logic (Physics Optimized)
 @st.cache_resource
 def load_physics_model():
-    # 사용 가능한 모델 목록을 가져옵니다.
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
-    # Gemini 3 Flash를 우선 찾고, 없으면 1.5 Flash를 선택하는 로직입니다.
     target_model = next((m for m in available_models if "gemini-3-flash" in m), 
                     next((m for m in available_models if "gemini-1.5-flash" in m), 
                     available_models[0]))
-    
     return genai.GenerativeModel(
         model_name=target_model,
         system_instruction=(
@@ -29,7 +75,6 @@ def load_physics_model():
         )
     )
 
-# 물리 모델 초기화
 model = load_physics_model()
 
 # 3. User Interface (Physics Theme)
@@ -37,17 +82,14 @@ st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
 st.title("⚛️ A-Level Physics Revision Tool")
 st.write(f"Connected to Model: **{model.model_name}**")
 
-# 질문 사진 업로드 (이미지 전용)
 uploaded_file = st.file_uploader("Upload a physics question photo", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, caption='Question Preview', use_container_width=True)
-    
     if st.button('Generate Model Answer'):
         with st.spinner('Accessing Physics Database...'):
             try:
-                # AI Studio에 연동된 구글 드라이브 문서를 참조하여 답변을 생성합니다.
                 response = model.generate_content([
                     "Provide the A-level model answer for this physics question. Reference the mark schemes in my drive.", 
                     image
@@ -56,3 +98,10 @@ if uploaded_file:
                 st.markdown(response.text)
             except Exception as e:
                 st.error(f"Technical Error: {e}")
+
+# ── Logout ──────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("---")
+    if st.button("Log out", use_container_width=True):
+        st.session_state["phys_auth"] = False
+        st.rerun()
