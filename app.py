@@ -45,7 +45,7 @@ def verify_user(email: str, code: str):
         return False, "error"
 
 def show_access_gate():
-    st.set_page_config(page_title="Kodari Physics", layout="centered")
+    st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -138,7 +138,6 @@ def load_physics_model():
 model = load_physics_model()
 
 # 3. User Interface (Physics Theme)
-st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
 st.title("⚛️ A-Level Physics Revision Tool")
 st.write(f"Connected to Model: **{model.model_name}**")
 
