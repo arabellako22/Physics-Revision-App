@@ -49,7 +49,7 @@ def show_access_gate():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("## ⚛️ Kodari Physics")
+        st.markdown("## ⚛️ A-Level Physics Solver")
         st.markdown("*A-Level Physics Revision*")
         st.markdown("---")
         st.markdown("#### Enter your details")
@@ -98,7 +98,7 @@ def show_access_gate():
             )
 
         # 셀프 서비스 FAQ
-        with st.expander("❓ Having trouble logging in?"):
+        with st.expander("Having trouble logging in?"):
             st.markdown("""
             - Use the **exact email** from your PayPal receipt
             - Check for spaces before/after your code
