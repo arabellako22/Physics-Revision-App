@@ -1,10 +1,48 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import os
+from supabase import create_client
 
-# ── Access Control ──────────────────────────────────────────────────────────────
+# — Supabase 연결 ————————————————————————
+@st.cache_resource
+def get_supabase():
+    url = os.environ.get("SUPABASE_URL") or st.secrets["SUPABASE_URL"]
+    key = os.environ.get("SUPABASE_ANON_KEY") or st.secrets["SUPABASE_ANON_KEY"]
+    return create_client(url, key)
+
+# — Access Control ————————————————————————
 def is_authenticated():
     return st.session_state.get("phys_auth", False)
+
+@st.cache_data(ttl=300)
+def verify_user(email: str, code: str):
+    try:
+        supabase = get_supabase()
+        result = supabase.table("users")\
+            .select("*")\
+            .eq("code", code.upper().strip())\
+            .eq("subject", "physics")\
+            .eq("status", "active")\
+            .execute()
+
+        if not result.data:
+            return False, "invalid_code"
+
+        user = result.data[0]
+        if user["email"].lower() != email.lower().strip():
+            return False, "email_mismatch"
+
+        # 사용 횟수 업데이트
+        supabase.table("users")\
+            .update({"usage_count": user["usage_count"] + 1})\
+            .eq("id", user["id"])\
+            .execute()
+
+        return True, "success"
+
+    except Exception as e:
+        return False, "error"
 
 def show_access_gate():
     st.set_page_config(page_title="Kodari Physics", layout="centered")
@@ -14,44 +52,66 @@ def show_access_gate():
         st.markdown("## ⚛️ Kodari Physics")
         st.markdown("*A-Level Physics Revision*")
         st.markdown("---")
-        st.markdown("#### Enter your access code")
+        st.markdown("#### Enter your details")
+
+        email = st.text_input(
+            "Email used at checkout",
+            placeholder="student@email.com",
+            label_visibility="collapsed",
+        )
         code = st.text_input(
-            label="Access Code",
+            "Access Code",
             placeholder="e.g. PHYS-A001",
             label_visibility="collapsed",
         )
+
         if st.button("Access →", type="primary", use_container_width=True):
-            if not code:
-                st.error("Please enter your access code.")
+            if not email or not code:
+                st.warning("Please enter both your email and access code.")
             else:
-                try:
-                    valid_codes = [c.strip().upper() for c in st.secrets["PHYS_ACCESS_CODES"]]
-                    if code.strip().upper() in valid_codes:
-                        st.session_state["phys_auth"] = True
-                        st.rerun()
-                    else:
-                        st.error("Invalid access code. Please check your code and try again.")
-                except Exception:
-                    st.error("Access code system error. Please contact your teacher.")
+                with st.spinner("Verifying..."):
+                    success, reason = verify_user(email, code)
+
+                if success:
+                    st.session_state["phys_auth"] = True
+                    st.rerun()
+                elif reason == "invalid_code":
+                    st.error("❌ Access code not found. Please check your code.")
+                elif reason == "email_mismatch":
+                    st.error("❌ Email doesn't match. Use the email from your PayPal receipt.")
+                else:
+                    st.error("⚠️ System error. Please try again.")
+
+        # 구매 링크
         try:
-            purchase_url = st.secrets.get("PHYS_STRIPE_URL", "")
+            purchase_url = st.secrets.get("PHYS_PAYMENT_URL", "")
         except Exception:
             purchase_url = ""
+
         if purchase_url:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(
                 f"<div style='text-align:center'>"
-                f"<a href='{purchase_url}' target='_blank'>🛒 Get Physics Access</a>"
+                f"<a href='{purchase_url}' target='_blank'>🎟 Get Physics Access</a>"
                 f"</div>",
                 unsafe_allow_html=True
             )
 
-# ── Gate Check ──────────────────────────────────────────────────────────────────
+        # 셀프 서비스 FAQ
+        with st.expander("❓ Having trouble logging in?"):
+            st.markdown("""
+            - Use the **exact email** from your PayPal receipt
+            - Check for spaces before/after your code
+            - Codes are case-insensitive
+            - Still stuck? Email: **support@kodari.co.uk**
+            """)
+
+# — Gate Check ————————————————————————
 if not is_authenticated():
     show_access_gate()
     st.stop()
 
-# ── 원본 코드 (한 줄도 수정 없음) ────────────────────────────────────────────────
+# — 원본 코드 (한 줄도 수정 없음) ————————————————
 
 # 1. API Configuration
 try:
@@ -63,15 +123,15 @@ except Exception as e:
 @st.cache_resource
 def load_physics_model():
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    target_model = next((m for m in available_models if "gemini-3-flash" in m), 
-                    next((m for m in available_models if "gemini-1.5-flash" in m), 
-                    available_models[0]))
+    target_model = next((m for m in available_models if "gemini-3-flash" in m),
+                        next((m for m in available_models if "gemini-1.5-flash" in m),
+                        available_models[0]))
     return genai.GenerativeModel(
         model_name=target_model,
         system_instruction=(
             "You are an expert A-Level Physics Examiner. "
             "Use the provided Google Drive documents to provide definitive model answers. "
-            "Focus on mark scheme accuracy, bold essential keywords, and use LaTeX for all equations and physical symbols."
+            "Focus on mark scheme accuracy, bold essential keywords, and use LaTeX for all equations."
         )
     )
 
@@ -91,15 +151,14 @@ if uploaded_file:
         with st.spinner('Accessing Physics Database...'):
             try:
                 response = model.generate_content([
-                    "Provide the A-level model answer for this physics question. Reference the mark schemes in my drive.", 
-                    image
+                    "Provide the A-level model answer for this physics question. Reference the image"
                 ])
                 st.success("Analysis Complete!")
                 st.markdown(response.text)
             except Exception as e:
                 st.error(f"Technical Error: {e}")
 
-# ── Logout ──────────────────────────────────────────────────────────────────────
+# — Logout ————————————————————————
 with st.sidebar:
     st.markdown("---")
     if st.button("Log out", use_container_width=True):
