@@ -49,7 +49,7 @@ def show_access_gate():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("## ⚛️ A-Level Physics Solver")
+        st.markdown("## ⚛️ Physics Solver")
         st.markdown("*A-Level Physics Revision*")
         st.markdown("---")
         st.markdown("#### Enter your details")
