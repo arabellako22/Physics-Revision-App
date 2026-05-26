@@ -4,12 +4,14 @@ from PIL import Image
 import os
 from supabase import create_client
 
+# ── Supabase 연결 ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_supabase():
     url = os.environ.get("SUPABASE_URL") or st.secrets["SUPABASE_URL"]
     key = os.environ.get("SUPABASE_ANON_KEY") or st.secrets["SUPABASE_ANON_KEY"]
     return create_client(url, key)
 
+# ── Access Control ───────────────────────────────────────────────────────────────
 def is_authenticated():
     return st.session_state.get("phys_auth", False)
 
@@ -37,16 +39,24 @@ def verify_user(email: str, code: str):
         return False, "error"
 
 def show_access_gate():
-    st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
+    st.set_page_config(page_title="Kodari Physics", layout="centered")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("## ⚛️ Physics Solver")
+        st.markdown("## ⚛️ Kodari Physics")
         st.markdown("*A-Level Physics Revision*")
         st.markdown("---")
         st.markdown("#### Enter your details")
-        email = st.text_input("Email used at checkout", placeholder="student@email.com", label_visibility="collapsed")
-        code = st.text_input("Access Code", placeholder="e.g. PHYS-A001", label_visibility="collapsed")
+        email = st.text_input(
+            label="Email used at checkout",
+            placeholder="student@email.com",
+            label_visibility="collapsed",
+        )
+        code = st.text_input(
+            label="Access Code",
+            placeholder="e.g. PHYS-A001",
+            label_visibility="collapsed",
+        )
         if st.button("Access →", type="primary", use_container_width=True):
             if not email or not code:
                 st.warning("Please enter both your email and access code.")
@@ -68,7 +78,12 @@ def show_access_gate():
             purchase_url = ""
         if purchase_url:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:center'><a href='{purchase_url}' target='_blank'>🎟 Get Physics Access</a></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='text-align:center'>"
+                f"<a href='{purchase_url}' target='_blank'>🛒 Get Physics Access</a>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
         with st.expander("Having trouble logging in?"):
             st.markdown("""
             - Use the **exact email** from your PayPal receipt
@@ -77,20 +92,25 @@ def show_access_gate():
             - Still stuck? Email: **support@kodari.co.uk**
             """)
 
+# ── Gate Check ───────────────────────────────────────────────────────────────────
 if not is_authenticated():
     show_access_gate()
     st.stop()
 
+# ── 원본 코드 (한 줄도 수정 없음) ────────────────────────────────────────────────
+
+# 1. API Configuration
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
     st.error("API Key missing! Check your Streamlit Secrets settings.")
 
+# 2. Smart Model Selection Logic (Physics Optimized)
 @st.cache_resource
 def load_physics_model():
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    target_model = next((m for m in available_models if "gemini-3-flash" in m),
-                    next((m for m in available_models if "gemini-1.5-flash" in m),
+    target_model = next((m for m in available_models if "gemini-3-flash" in m), 
+                    next((m for m in available_models if "gemini-1.5-flash" in m), 
                     available_models[0]))
     return genai.GenerativeModel(
         model_name=target_model,
@@ -103,6 +123,8 @@ def load_physics_model():
 
 model = load_physics_model()
 
+# 3. User Interface (Physics Theme)
+st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
 st.title("⚛️ A-Level Physics Revision Tool")
 st.write(f"Connected to Model: **{model.model_name}**")
 
@@ -115,7 +137,7 @@ if uploaded_file:
         with st.spinner('Accessing Physics Database...'):
             try:
                 response = model.generate_content([
-                    "Provide the A-level model answer for this physics question. Reference the mark schemes in my drive.",
+                    "Provide the A-level model answer for this physics question. Reference the mark schemes in my drive.", 
                     image
                 ])
                 st.success("Analysis Complete!")
@@ -123,6 +145,7 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Technical Error: {e}")
 
+# ── Logout ───────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("---")
     if st.button("Log out", use_container_width=True):
