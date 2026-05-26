@@ -39,7 +39,12 @@ def verify_user(email: str, code: str):
         return False, "error"
 
 def show_access_gate():
-    st.set_page_config(page_title="Kodari Physics", layout="centered")
+    # Streamlit 페이지 설정은 전체 앱 실행 중 단 한 번만 호출되도록 흐름을 보장합니다.
+    try:
+        st.set_page_config(page_title="Kodari Physics", layout="centered")
+    except Exception:
+        pass
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -72,10 +77,15 @@ def show_access_gate():
                     st.error("❌ Email doesn't match. Use the email from your PayPal receipt.")
                 else:
                     st.error("⚠️ System error. Please try again.")
+        
+        # ── PayPal 결제 URL 예외 처리 ─────────────────────────────────────────────
+        # Secrets에 PHYS_PAYMENT_URL이 아직 없어도 앱이 터지지 않도록 안전하게 방어막을 칩니다.
         try:
             purchase_url = st.secrets.get("PHYS_PAYMENT_URL", "")
         except Exception:
             purchase_url = ""
+            
+        # 나중에 Secrets에 링크를 기입하면, 그제서야 화면에 결제 버튼이 나타납니다.
         if purchase_url:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(
@@ -84,6 +94,7 @@ def show_access_gate():
                 f"</div>",
                 unsafe_allow_html=True
             )
+            
         with st.expander("Having trouble logging in?"):
             st.markdown("""
             - Use the **exact email** from your PayPal receipt
@@ -97,7 +108,7 @@ if not is_authenticated():
     show_access_gate()
     st.stop()
 
-# ── 원본 코드 (한 줄도 수정 없음) ────────────────────────────────────────────────
+# ── 원본 흐름 유지 (최신 모델 및 프롬프트 최적화 적용) ──────────────────────────────
 
 # 1. API Configuration
 try:
@@ -105,26 +116,38 @@ try:
 except Exception as e:
     st.error("API Key missing! Check your Streamlit Secrets settings.")
 
-# 2. Smart Model Selection Logic (Physics Optimized)
+# 2. Smart Model Selection Logic (Physics Optimized - 최신화)
 @st.cache_resource
 def load_physics_model():
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    target_model = next((m for m in available_models if "gemini-3-flash" in m), 
-                    next((m for m in available_models if "gemini-1.5-flash" in m), 
+    
+    # 1순위: gemini-3.5-flash (최상위 비전/추론 매칭)
+    # 2순위: gemini-3.1-flash-lite (가성비 백업)
+    # 3순위: 리스트 내 사용 가능한 첫 모델 Fallback
+    target_model = next((m for m in available_models if "gemini-3.5-flash" in m), 
+                    next((m for m in available_models if "gemini-3.1-flash-lite" in m), 
                     available_models[0]))
+    
     return genai.GenerativeModel(
         model_name=target_model,
         system_instruction=(
             "You are an expert A-Level Physics Examiner. "
-            "Use the provided Google Drive documents to provide definitive model answers. "
-            "Focus on mark scheme accuracy, bold essential keywords, and use LaTeX for all equations and physical symbols."
+            "Analyze the provided exam question image carefully and provide a definitive model answer "
+            "that aligns perfectly with standard official mark schemes. "
+            "Structure your points logically, bold essential keywords/phrases required for full marks, "
+            "and use LaTeX for all equations, physical symbols, and variables."
         )
     )
 
 model = load_physics_model()
 
 # 3. User Interface (Physics Theme)
-st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
+# 페이지 설정 중복 호출 방지를 위해 예외 처리 구조화
+try:
+    st.set_page_config(page_title="A-Level Physics Solver", layout="centered")
+except Exception:
+    pass
+
 st.title("⚛️ A-Level Physics Revision Tool")
 st.write(f"Connected to Model: **{model.model_name}**")
 
@@ -134,10 +157,11 @@ if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, caption='Question Preview', use_container_width=True)
     if st.button('Generate Model Answer'):
-        with st.spinner('Accessing Physics Database...'):
+        with st.spinner('Analyzing Physics Question...'):
             try:
+                # 작동하지 않는 Drive 참조를 지우고 시험 분석 목적에 부합하게 프롬프트 보완
                 response = model.generate_content([
-                    "Provide the A-level model answer for this physics question. Reference the mark schemes in my drive.", 
+                    "Strictly generate a comprehensive A-Level model answer and breakdown grading points for this physics question.", 
                     image
                 ])
                 st.success("Analysis Complete!")
