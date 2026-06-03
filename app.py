@@ -8,7 +8,8 @@ from supabase import create_client
 @st.cache_resource
 def get_supabase():
     url = os.environ.get("SUPABASE_URL") or st.secrets["SUPABASE_URL"]
-    key = os.environ.get("SUPABASE_ANON_KEY") or st.secrets["SUPABASE_ANON_KEY"]
+    # 보안 강화를 위해 기존 ANON 키 대신 service_role 키를 불러오도록 변수명을 변경합니다.
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or st.secrets["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
 
 # ── Access Control ───────────────────────────────────────────────────────────────
